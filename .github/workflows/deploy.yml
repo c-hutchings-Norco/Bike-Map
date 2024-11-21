@@ -26,6 +26,7 @@ jobs:
           BASE_PATH: '/${{ github.event.repository.name }}'
         run: |
           npm run build
+          mkdir -p build
           touch build/.nojekyll
 
       # Handle SPA routing for GitHub Pages
