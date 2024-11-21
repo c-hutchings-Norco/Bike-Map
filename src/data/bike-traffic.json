@@ -1,0 +1,28 @@
+{
+  "hourly_data": [
+    {
+      "station_id": 1,
+      "hour": 8,
+      "pickups": 15,
+      "dropoffs": 5
+    },
+    {
+      "station_id": 1,
+      "hour": 9,
+      "pickups": 20,
+      "dropoffs": 8
+    },
+    {
+      "station_id": 2,
+      "hour": 8,
+      "pickups": 12,
+      "dropoffs": 10
+    },
+    {
+      "station_id": 2,
+      "hour": 9,
+      "pickups": 18,
+      "dropoffs": 15
+    }
+  ]
+} 

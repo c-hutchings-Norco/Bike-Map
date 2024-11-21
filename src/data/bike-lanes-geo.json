@@ -1,0 +1,35 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Massachusetts Ave Bike Lane",
+        "type": "protected"
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [-71.0589, 42.3601],
+          [-71.0571, 42.3589],
+          [-71.0558, 42.3573]
+        ]
+      }
+    },
+    {
+      "type": "Feature",
+      "properties": {
+        "name": "Beacon Street Bike Lane",
+        "type": "shared"
+      },
+      "geometry": {
+        "type": "LineString",
+        "coordinates": [
+          [-71.0699, 42.3555],
+          [-71.0673, 42.3563],
+          [-71.0642, 42.3578]
+        ]
+      }
+    }
+  ]
+} 
