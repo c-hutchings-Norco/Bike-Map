@@ -1,0 +1,89 @@
+name: Deploy to GitHub Pages
+
+on:
+  push:
+    branches:
+      - 'main'
+
+jobs:
+  build_site:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Install Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Install cloc
+        run: sudo apt-get install -y cloc
+
+      # Debugging step: Checking node version and npm cache
+      - name: Debug Node.js and npm cache
+        run: |
+          node -v
+          npm cache verify
+          echo "Node.js and npm cache verified."
+
+      - name: Build
+        env:
+          BASE_PATH: '/${{ github.event.repository.name }}'
+        run: |
+          npm run analyze && npx vite build  # Using npx to run vite
+          touch build/.nojekyll  # Adjusted to match the 'build' folder
+
+      # Debugging step: Confirming files in static directory and CSV file contents
+      - name: List Static Directory
+        run: |
+          echo "Listing files in static directory:"
+          ls -R static/
+      
+      - name: Display CSV Content
+        if: success()
+        run: |
+          if [ -f static/code-analysis.csv ]; then
+            echo "CSV file found. Displaying content:"
+            cat static/code-analysis.csv
+          else
+            echo "CSV file not found in static directory."
+          fi
+
+      - name: Create 404.html for SPA routing
+        run: |
+          cp build/index.html build/404.html  # Also adjusted to 'build'
+
+      - name: Upload Artifacts
+        uses: actions/upload-pages-artifact@v3
+        with:
+          path: 'build/'  # Matches the output directory
+
+  deploy:
+    needs: build_site
+    runs-on: ubuntu-latest
+
+    permissions:
+      pages: write
+      id-token: write
+
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+
+    steps:
+      - name: Deploy
+        id: deployment
+        uses: actions/deploy-pages@v4
+
+      # Debugging step: Checking final deployment status and logs
+      - name: Check Deployment Status
+        run: |
+          echo "Deployment URL: ${{ steps.deployment.outputs.page_url }}"
+          echo "Deployment finished. Verify at the above URL."
