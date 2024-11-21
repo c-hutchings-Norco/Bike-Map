@@ -38,10 +38,18 @@ jobs:
           npm run build
           mkdir -p build
           touch build/.nojekyll
+          # Debug: List build contents
+          echo "Build directory contents:"
+          ls -la build/
+          
           # Copy static assets if any
           if [ -d "static" ]; then
             cp -r static/* build/
           fi
+
+          # Debug: List final contents
+          echo "Final build directory contents:"
+          ls -la build/
 
       - name: Handle SPA routing
         run: |
