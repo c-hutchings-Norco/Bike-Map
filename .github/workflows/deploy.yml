@@ -38,6 +38,10 @@ jobs:
           npm run build
           mkdir -p build
           touch build/.nojekyll
+          # Copy static assets if any
+          if [ -d "static" ]; then
+            cp -r static/* build/
+          fi
 
       - name: Handle SPA routing
         run: |
