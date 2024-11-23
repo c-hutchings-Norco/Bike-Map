@@ -168,7 +168,45 @@
 
   const { batchUpdates, smoothUpdate } = optimizePerformance();
 
-  // Update initializeMap
+  // Process stations from the imported CSV
+  function processStations() {
+    const rows = stationsData.split('\n').slice(1); // Skip header
+    return rows
+      .filter(row => row.trim())
+      .map(row => {
+        const [
+          number,
+          name,
+          lat,
+          long,
+          seasonal_status,
+          municipality,
+          total_docks
+        ] = row.split(',');
+
+        return {
+          type: 'Feature',
+          geometry: {
+            type: 'Point',
+            coordinates: [parseFloat(long), parseFloat(lat)]
+          },
+          properties: {
+            id: number,
+            name: name,
+            status: getRandomStatus(),
+            total_docks: parseInt(total_docks),
+            municipality: municipality,
+            seasonal_status: seasonal_status,
+            usage: Math.random() * 100
+          }
+        };
+      })
+      .filter(station => 
+        !isNaN(station.geometry.coordinates[0]) && 
+        !isNaN(station.geometry.coordinates[1])
+      );
+  }
+
   async function initializeMap() {
     try {
       mapbox.accessToken = MAPBOX_TOKEN;
@@ -187,8 +225,11 @@
         });
       });
 
-      // Use bikeNetworkData directly
+      // Use imported data directly
       bikeNetwork = bikeNetworkData;
+      stations = processStations();
+      stations = generateTrafficData(); // Add traffic patterns
+
       await setupLayers();
       mapInitialized = true;
       
