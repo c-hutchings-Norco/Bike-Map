@@ -14,8 +14,7 @@ const config = {
 			strict: true
 		}),
 		prerender: {
-			entries: ['*'],
-			base: process.env.NODE_ENV === 'production' ? '/c-hutchings-norco.github.io' : ''
+			entries: ['*']
 		}
 	}
 };
