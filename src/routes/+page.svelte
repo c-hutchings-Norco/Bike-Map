@@ -1,525 +1,530 @@
-  <script>
-    import mapbox from 'mapbox-gl';
-    import { onMount, onDestroy } from 'svelte';
-    import { scaleLinear, scaleQuantile } from 'd3-scale';
-    import { csv } from 'd3-fetch';
-    import debounce from 'lodash/debounce';
-    import { createStationQuadtree, throttle, calculateStationStats } from '$lib/utils';
-    import 'mapbox-gl/dist/mapbox-gl.css';
-    import bikeLanes from '../data/bike-lanes-geo.json';
-    import bikeTraffic from '../data/bike-traffic.json';
-    import bikeNetwork from '../data/Existing_Bike_Network_2022.geojson';
+<script>
+  import mapbox from 'mapbox-gl';
+  import { onMount, onDestroy } from 'svelte';
+  import 'mapbox-gl/dist/mapbox-gl.css';
+  import bikeNetwork from '../data/Existing_Bike_Network_2022.geojson';
 
-    const MAPBOX_TOKEN = 'pk.eyJ1IjoiY2h1dGNoaW5ncyIsImEiOiJjbTNxZ3NqY28wNHIxMmtvZnc1Zjc0NW12In0.z4_H0bPDZyrgce46gWBCjQ';
-    let map;
-    let stations = [];
-    let markers = new Map(); // Using Map for better performance
-    let quadtree;
-    let currentHour = 8;
-    let showHeatmap = false;
-    let selectedStation = null;
-    let timeInterval;
-    let isPlaying = false;
+  const MAPBOX_TOKEN = 'pk.eyJ1IjoiY2h1dGNoaW5ncyIsImEiOiJjbTNxZ3NqY28wNHIxMmtvZnc1Zjc0NW12In0.z4_H0bPDZyrgce46gWBCjQ';
+  let map;
+  let container;
+  let currentTime = "11:59 PM";
+  let timeSliderValue = 100;
+  let stations = [];
+  let showHeatmap = false;
 
-    // Enhanced color scales
-    const trafficColorScale = scaleQuantile()
-      .domain([0, 10, 20, 30, 40, 50])
-      .range(['#2ecc71', '#a1d344', '#f1c40f', '#e67e22', '#e74c3c', '#c0392b']);
-
-    // Animation controls
-    function togglePlayback() {
-      isPlaying = !isPlaying;
-      if (isPlaying) {
-        timeInterval = setInterval(() => {
-          currentHour = (currentHour + 1) % 24;
-        }, 1000);
-      } else {
-        clearInterval(timeInterval);
-      }
-    }
-
-    onDestroy(() => {
-      if (timeInterval) clearInterval(timeInterval);
-    });
-
-    // Optimized marker update function
-    const updateMarkers = throttle(() => {
-      if (!map) return;
-      
-      const bounds = map.getBounds();
-      const visibleStations = stations.filter(station => 
-        bounds.contains([station.longitude, station.latitude])
-      );
-
-      visibleStations.forEach(station => {
-        const marker = markers.get(station.id);
-        if (marker) {
-          const stats = calculateStationStats(station, bikeTraffic, currentHour);
-          const el = marker.getElement();
-          
-          el.style.width = `${10 + Math.sqrt(stats.totalTraffic) * 3}px`;
-          el.style.height = el.style.width;
-          el.style.backgroundColor = trafficColorScale(Math.abs(stats.netFlow));
-          
-          // Update popup content
-          marker.getPopup().setHTML(`
-            <div class="popup-content">
-              <h3>${station.name}</h3>
-              <div class="stats">
-                <div>Pickups: ${stats.pickups}</div>
-                <div>Dropoffs: ${stats.dropoffs}</div>
-                <div>Net Flow: ${stats.netFlow > 0 ? '+' : ''}${stats.netFlow}</div>
-              </div>
-            </div>
-          `);
-        }
-      });
-    }, 100);
-
-    // Handle map movement
-    function onMapMove() {
-      if (!map) return;
-      
-      if (showHeatmap) {
-        updateHeatmap();
-      } else {
-        updateMarkers();
-      }
-    }
-
-    // Initialize heatmap
-    function updateHeatmap() {
-      if (!map.getSource('traffic-heat')) {
-        map.addSource('traffic-heat', {
-          type: 'geojson',
-          data: {
-            type: 'FeatureCollection',
-            features: stations.map(station => ({
-              type: 'Feature',
-              geometry: {
-                type: 'Point',
-                coordinates: [station.longitude, station.latitude]
-              },
-              properties: {
-                traffic: calculateStationStats(station, bikeTraffic, currentHour).totalTraffic
-              }
-            }))
-          }
-        });
-
-        map.addLayer({
-          id: 'traffic-heat',
-          type: 'heatmap',
-          source: 'traffic-heat',
-          paint: {
-            'heatmap-weight': ['get', 'traffic'],
-            'heatmap-intensity': 1,
-            'heatmap-color': [
-              'interpolate',
-              ['linear'],
-              ['heatmap-density'],
-              0, 'rgba(0, 0, 255, 0)',
-              0.2, '#2ecc71',
-              0.4, '#f1c40f',
-              0.6, '#e67e22',
-              0.8, '#e74c3c',
-              1, '#c0392b'
-            ],
-            'heatmap-radius': 30
-          }
-        });
-      } else {
-        map.getSource('traffic-heat').setData({
-          type: 'FeatureCollection',
-          features: stations.map(station => ({
-            type: 'Feature',
-            geometry: {
-              type: 'Point',
-              coordinates: [station.longitude, station.latitude]
-            },
-            properties: {
-              traffic: calculateStationStats(station, bikeTraffic, currentHour).totalTraffic
-            }
-          }))
-        });
-      }
-    }
-
-    // Toggle visualization mode
-    function toggleVisualizationMode() {
-      showHeatmap = !showHeatmap;
-      markers.forEach(marker => {
-        marker.getElement().style.display = showHeatmap ? 'none' : 'block';
-      });
-      
-      if (showHeatmap) {
-        updateHeatmap();
-      } else {
-        if (map.getLayer('traffic-heat')) {
-          map.removeLayer('traffic-heat');
-          map.removeSource('traffic-heat');
-        }
-      }
-    }
-
-    async function loadStations() {
-      try {
-        // Mock data for now
-        stations = [
-          { 
-            id: 1, 
-            name: "Station 1", 
-            latitude: 42.3601, 
-            longitude: -71.0589, 
-            capacity: 20 
-          },
-          { 
-            id: 2, 
-            name: "Station 2", 
-            latitude: 42.3555, 
-            longitude: -71.0699, 
-            capacity: 15 
-          }
-        ];
-        quadtree = createStationQuadtree(stations);
-      } catch (error) {
-        console.error('Error loading stations:', error);
-        stations = [];
-      }
-    }
-
-    onMount(async () => {
-      await loadStations();
-      
-      mapbox.accessToken = MAPBOX_TOKEN;
-      
-      map = new mapbox.Map({
-        container: 'map',
-        style: 'mapbox://styles/mapbox/light-v11',
-        center: [-71.0589, 42.3601],
-        zoom: 12
-      });
-
-      map.on('load', () => {
-        try {
-          // Add bike network data
-          map.addSource('bike-network', {
-            type: 'geojson',
-            data: bikeNetwork
-          });
-
-          map.addLayer({
-            id: 'bike-network',
-            type: 'line',
-            source: 'bike-network',
-            paint: {
-              'line-color': [
-                'match',
-                ['get', 'ExisFacil'],
-                'BL', '#3498db',    // Bike Lane
-                'BFBL', '#2ecc71',  // Buffered Bike Lane
-                'SLM', '#f1c40f',   // Shared Lane Marking
-                'SUP', '#9b59b6',   // Separated/Protected
-                '#7f8c8d'          // Other/Default
-              ],
-              'line-width': 3
-            }
-          });
-        } catch (error) {
-          console.error('Error adding bike network layer:', error);
-        }
-        
-        // Add bike lanes
-        map.addSource('bike-lanes', {
-          type: 'geojson',
-          data: bikeLanes
-        });
-
-        map.addLayer({
-          id: 'bike-lanes',
-          type: 'line',
-          source: 'bike-lanes',
-          paint: {
-            'line-color': [
-              'match',
-              ['get', 'type'],
-              'protected', '#2ecc71',
-              'shared', '#3498db',
-              '#7f8c8d'
-            ],
-            'line-width': 3
-          }
-        });
-
-        // Add station markers
-        markers = stations.map(station => {
-          const stats = calculateStationStats(station, bikeTraffic, currentHour);
-          const traffic = Math.abs(stats.netFlow);
-          
-          const el = document.createElement('div');
-          el.className = 'station-marker';
-          el.style.width = `${10 + traffic * 2}px`;
-          el.style.height = `${10 + traffic * 2}px`;
-          el.style.backgroundColor = trafficColorScale(Math.abs(stats.netFlow));
-
-          return new mapbox.Marker(el)
-            .setLngLat([station.longitude, station.latitude])
-            .setPopup(
-              new mapbox.Popup({ offset: 25 })
-                .setHTML(`
-                  <h3>${station.name}</h3>
-                  <p>Capacity: ${station.capacity}</p>
-                  <p>Net Flow: ${stats.netFlow}</p>
-                  <p>Status: ${stats.netFlow > 0 ? 'More pickups' : stats.netFlow < 0 ? 'More dropoffs' : 'Balanced'}</p>
-                `)
-            )
-            .addTo(map);
-        });
-      });
-
-      map.on('moveend', debounce(onMapMove, 100));
-      map.on('zoomend', debounce(onMapMove, 100));
-    });
-
-    $: if (currentHour !== undefined && map) {
-      if (showHeatmap) {
-        updateHeatmap();
-      } else {
-        updateMarkers();
-      }
-    }
-  </script>
-
-  <main>
-    <h1>Boston Bike Map</h1>
-    <div id="map"></div>
+  // Generate stations at network intersections
+  function generateStations() {
+    const intersections = new Set();
     
-    <div class="controls">
-      <div class="visualization-toggle">
-        <button on:click={toggleVisualizationMode}>
-          {showHeatmap ? 'Show Markers' : 'Show Heatmap'}
-        </button>
-      </div>
+    // Extract unique coordinates from bike network
+    bikeNetwork.features.forEach(feature => {
+      if (feature.geometry.type === 'LineString') {
+        feature.geometry.coordinates.forEach(coord => {
+          intersections.add(JSON.stringify(coord));
+        });
+      }
+    });
 
-      <div class="time-control">
-        <button on:click={togglePlayback}>
-          {isPlaying ? '⏸️ Pause' : '▶️ Play'}
-        </button>
-        <label>
-          Hour: <input type="range" min="0" max="23" bind:value={currentHour}>
-          {currentHour.toString().padStart(2, '0')}:00
-        </label>
-      </div>
-    </div>
+    // Convert to station features
+    return Array.from(intersections).map((coord, index) => {
+      const [lng, lat] = JSON.parse(coord);
+      return {
+        type: 'Feature',
+        geometry: {
+          type: 'Point',
+          coordinates: [lng, lat]
+        },
+        properties: {
+          id: index,
+          status: getRandomStatus(),
+          usage: Math.floor(Math.random() * 100)
+        }
+      };
+    });
+  }
 
-    <div class="legend">
-      <h3>Legend</h3>
-      <div class="legend-section">
-        <h4>Bike Infrastructure</h4>
-        <div class="legend-item">
-          <div class="line-sample bike-lane"></div>
-          <span>Bike Lane</span>
-        </div>
-        <div class="legend-item">
-          <div class="line-sample buffered"></div>
-          <span>Buffered Bike Lane</span>
-        </div>
-        <div class="legend-item">
-          <div class="line-sample shared"></div>
-          <span>Shared Lane Marking</span>
-        </div>
-        <div class="legend-item">
-          <div class="line-sample protected"></div>
-          <span>Protected/Separated</span>
-        </div>
-      </div>
+  function getRandomStatus() {
+    const statuses = ['departures', 'balanced', 'arrivals'];
+    return statuses[Math.floor(Math.random() * statuses.length)];
+  }
+
+  function updateTime(value) {
+    const minutes = Math.floor((value / 100) * 24 * 60);
+    const hours = Math.floor(minutes / 60);
+    const mins = minutes % 60;
+    const period = hours >= 12 ? 'PM' : 'AM';
+    const displayHours = hours % 12 || 12;
+    currentTime = `${displayHours}:${mins.toString().padStart(2, '0')} ${period}`;
+    
+    // Update station statuses based on time
+    updateStationStatuses(hours);
+  }
+
+  function updateStationStatuses(hour) {
+    if (!map || !map.getSource('stations')) return;
+
+    const updatedStations = stations.map(station => {
+      const hourData = station.hourlyTraffic[hour];
+      return {
+        ...station,
+        properties: {
+          ...station.properties,
+          status: hourData.status,
+          usage: hourData.usage
+        }
+      };
+    });
+
+    map.getSource('stations').setData({
+      type: 'FeatureCollection',
+      features: updatedStations
+    });
+
+    // Update traffic heatmap if enabled
+    if (map.getLayer('traffic-heat')) {
+      map.setPaintProperty('traffic-heat', 'heatmap-weight', [
+        'interpolate',
+        ['linear'],
+        ['get', 'usage'],
+        0, 0,
+        100, 1
+      ]);
+    }
+  }
+
+  function getTimeBasedStatus(hour) {
+    if (hour >= 6 && hour < 10) {
+      // Morning rush: more departures from residential areas
+      return Math.random() < 0.7 ? 'departures' : 'balanced';
+    } else if (hour >= 16 && hour < 19) {
+      // Evening rush: more arrivals in residential areas
+      return Math.random() < 0.7 ? 'arrivals' : 'balanced';
+    } else {
+      // Other times: mostly balanced
+      return 'balanced';
+    }
+  }
+
+  // Add these functions for traffic simulation
+  function generateTrafficData() {
+    const trafficPatterns = {
+      morning: { start: 6, end: 10, peakHour: 8 },
+      evening: { start: 16, end: 19, peakHour: 17 },
+    };
+
+    return stations.map(station => {
+      const hourlyTraffic = new Array(24).fill(0).map((_, hour) => {
+        // Base traffic (20-30% usage)
+        let traffic = 20 + Math.random() * 10;
+
+        // Morning rush hour pattern
+        if (hour >= trafficPatterns.morning.start && hour <= trafficPatterns.morning.end) {
+          const intensity = 1 - Math.abs(hour - trafficPatterns.morning.peakHour) / 4;
+          traffic += 50 * intensity; // Up to 70-80% usage during peak
+        }
+
+        // Evening rush hour pattern
+        if (hour >= trafficPatterns.evening.start && hour <= trafficPatterns.evening.end) {
+          const intensity = 1 - Math.abs(hour - trafficPatterns.evening.peakHour) / 3;
+          traffic += 40 * intensity; // Up to 60-70% usage during peak
+        }
+
+        return {
+          hour,
+          usage: Math.min(100, Math.round(traffic)),
+          status: getTimeBasedStatus(hour)
+        };
+      });
+
+      return {
+        ...station,
+        hourlyTraffic
+      };
+    });
+  }
+
+  onMount(() => {
+    mapbox.accessToken = MAPBOX_TOKEN;
+    
+    map = new mapbox.Map({
+      container,
+      style: 'mapbox://styles/mapbox/light-v11',
+      center: [-71.0589, 42.3601],
+      zoom: 12
+    });
+
+    map.on('load', () => {
+      // Add bike network with facility types
+      map.addSource('bike-network', {
+        type: 'geojson',
+        data: bikeNetwork
+      });
+
+      map.addLayer({
+        id: 'bike-network',
+        type: 'line',
+        source: 'bike-network',
+        paint: {
+          'line-color': [
+            'match',
+            ['get', 'ExisFacil'],
+            'BL', '#32CD32',    // Bike Lane - Light Green
+            'PBL', '#228B22',   // Protected Bike Lane - Dark Green
+            'SUP', '#4169E1',   // Shared Use Path - Blue
+            'SUPM', '#4169E1',  // Shared Use Path (Modified) - Blue
+            'SLM', '#FFA500',   // Shared Lane Marking - Orange
+            '#808080'           // Other/Default - Gray
+          ],
+          'line-width': 3,
+          'line-opacity': 0.8
+        }
+      });
+
+      // Generate and add stations
+      stations = generateStations();
       
-      <div class="legend-section">
-        <h4>Traffic Flow</h4>
-        <div class="legend-item">
-          <div class="circle-sample high-traffic"></div>
-          <span>High Traffic (40+ rides)</span>
-        </div>
-        <div class="legend-item">
-          <div class="circle-sample medium-traffic"></div>
-          <span>Medium Traffic (20-40 rides)</span>
-        </div>
-        <div class="legend-item">
-          <div class="circle-sample low-traffic"></div>
-          <span>Low Traffic (0-20 rides)</span>
-        </div>
-      </div>
+      map.addSource('stations', {
+        type: 'geojson',
+        data: {
+          type: 'FeatureCollection',
+          features: stations
+        }
+      });
 
-      <div class="legend-section">
-        <h4>Visualization Modes</h4>
-        <div class="legend-item">
-          <span>🎯 Markers: Individual station traffic</span>
-        </div>
-        <div class="legend-item">
-          <span>🌡️ Heatmap: Traffic density areas</span>
-        </div>
+      map.addLayer({
+        id: 'stations',
+        type: 'circle',
+        source: 'stations',
+        paint: {
+          'circle-radius': [
+            'interpolate',
+            ['linear'],
+            ['get', 'usage'],
+            0, 6,
+            100, 15
+          ],
+          'circle-color': [
+            'match',
+            ['get', 'status'],
+            'departures', '#4a90e2',
+            'balanced', '#9b59b6',
+            'arrivals', '#f5a623',
+            '#ccc'
+          ],
+          'circle-opacity': 0.8,
+          'circle-stroke-width': 2,
+          'circle-stroke-color': 'white'
+        }
+      });
+
+      // Add hover effects and popups
+      map.on('mouseenter', ['bike-network', 'stations'], () => {
+        map.getCanvas().style.cursor = 'pointer';
+      });
+
+      map.on('mouseleave', ['bike-network', 'stations'], () => {
+        map.getCanvas().style.cursor = '';
+      });
+
+      // Popup for bike lanes
+      map.on('click', 'bike-network', (e) => {
+        const coordinates = e.lngLat;
+        const properties = e.features[0].properties;
+
+        const facilityTypes = {
+          'BL': 'Bike Lane',
+          'PBL': 'Protected Bike Lane',
+          'SUP': 'Shared Use Path',
+          'SUPM': 'Shared Use Path (Modified)',
+          'SLM': 'Shared Lane Marking'
+        };
+
+        new mapbox.Popup()
+          .setLngLat(coordinates)
+          .setHTML(`
+            <div class="popup-content">
+              <h3>${properties.STREET_NAM || 'Unnamed Street'}</h3>
+              <p>Type: ${facilityTypes[properties.ExisFacil] || properties.ExisFacil}</p>
+              ${properties.InstallDat ? `<p>Installed: ${properties.InstallDat}</p>` : ''}
+            </div>
+          `)
+          .addTo(map);
+      });
+
+      // Popup for stations
+      map.on('click', 'stations', (e) => {
+        const coordinates = e.features[0].geometry.coordinates.slice();
+        const props = e.features[0].properties;
+
+        new mapbox.Popup()
+          .setLngLat(coordinates)
+          .setHTML(`
+            <div class="popup-content">
+              <h3>Station #${props.id}</h3>
+              <p>Status: ${props.status}</p>
+              <p>Usage: ${props.usage}%</p>
+              <p>Time: ${currentTime}</p>
+            </div>
+          `)
+          .addTo(map);
+      });
+
+      // Add traffic heatmap layer
+      map.addLayer({
+        id: 'traffic-heat',
+        type: 'heatmap',
+        source: 'stations',
+        paint: {
+          'heatmap-weight': [
+            'interpolate',
+            ['linear'],
+            ['get', 'usage'],
+            0, 0,
+            100, 1
+          ],
+          'heatmap-intensity': 1,
+          'heatmap-color': [
+            'interpolate',
+            ['linear'],
+            ['heatmap-density'],
+            0, 'rgba(0, 0, 255, 0)',
+            0.2, 'rgba(0, 0, 255, 0.2)',
+            0.4, 'rgba(0, 255, 255, 0.4)',
+            0.6, 'rgba(0, 255, 0, 0.6)',
+            0.8, 'rgba(255, 255, 0, 0.8)',
+            1, 'rgba(255, 0, 0, 1)'
+          ],
+          'heatmap-radius': 30
+        }
+      }, 'stations');
+
+      // Generate traffic data
+      stations = generateTrafficData();
+
+      // Update initial view
+      updateTime(timeSliderValue);
+    });
+  });
+
+  onDestroy(() => {
+    if (map) map.remove();
+  });
+</script>
+
+<div class="app-container">
+  <header>
+    <div class="logo">
+      <span class="bike-icon">🚲</span>
+      <h1>Bikewatching</h1>
+    </div>
+    <div class="time-filter">
+      <span>Filter by time:</span>
+      <input 
+        type="range" 
+        min="0" 
+        max="100" 
+        bind:value={timeSliderValue}
+        on:input={() => updateTime(timeSliderValue)}
+      />
+      <span class="time-display">{currentTime}</span>
+    </div>
+    <div class="view-controls">
+      <label>
+        <input 
+          type="checkbox" 
+          bind:checked={showHeatmap} 
+          on:change={() => {
+            if (map) {
+              map.setLayoutProperty('traffic-heat', 'visibility', 
+                showHeatmap ? 'visible' : 'none');
+            }
+          }}
+        />
+        Show Traffic Heatmap
+      </label>
+    </div>
+  </header>
+
+  <div class="map-container">
+    <div class="map" bind:this={container}></div>
+  </div>
+
+  <div class="legend">
+    <div class="legend-section">
+      <span class="legend-label">Bike Infrastructure:</span>
+      <div class="legend-item">
+        <div class="line-sample bike-lane"></div>
+        <span>Bike Lane</span>
+      </div>
+      <div class="legend-item">
+        <div class="line-sample protected"></div>
+        <span>Protected Lane</span>
+      </div>
+      <div class="legend-item">
+        <div class="line-sample shared"></div>
+        <span>Shared Lane</span>
       </div>
     </div>
-  </main>
+    
+    <div class="legend-section">
+      <span class="legend-label">Station Status:</span>
+      <div class="legend-item">
+        <div class="circle-sample departures"></div>
+        <span>More departures</span>
+      </div>
+      <div class="legend-item">
+        <div class="circle-sample balanced"></div>
+        <span>Balanced</span>
+      </div>
+      <div class="legend-item">
+        <div class="circle-sample arrivals"></div>
+        <span>More arrivals</span>
+      </div>
+    </div>
+  </div>
+</div>
 
-  <style>
-    :global(body) {
-      margin: 0;
-      padding: 0;
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen-Sans, Ubuntu, Cantarell, sans-serif;
-    }
+<style>
+  .app-container {
+    width: 100%;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
 
-    main {
-      width: 100%;
-      height: 100vh;
-      position: relative;
-    }
+  header {
+    padding: 1rem;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    background: white;
+    border-bottom: 1px solid #eee;
+  }
 
-    h1 {
-      position: absolute;
-      top: 1rem;
-      left: 1rem;
-      z-index: 1;
-      margin: 0;
-      padding: 0.5rem 1rem;
-      background: rgba(255, 255, 255, 0.9);
-      border-radius: 4px;
-      font-size: 1.5rem;
-    }
+  .logo {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+  }
 
-    #map {
-      width: 100%;
-      height: 100%;
-    }
+  .bike-icon {
+    font-size: 1.5rem;
+  }
 
-    .legend {
-      position: absolute;
-      top: 5rem;
-      right: 1rem;
-      background: white;
-      padding: 1rem;
-      border-radius: 4px;
-      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-      max-width: 250px;
-    }
+  h1 {
+    margin: 0;
+    font-size: 1.5rem;
+  }
 
-    .legend h3 {
-      margin: 0 0 1rem 0;
-      font-size: 1.2rem;
-    }
+  .time-filter {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+  }
 
-    .legend h4 {
-      margin: 0.5rem 0;
-      font-size: 1rem;
-    }
+  input[type="range"] {
+    width: 300px;
+  }
 
-    .legend-section {
-      margin-bottom: 1rem;
-    }
+  .time-display {
+    min-width: 80px;
+  }
 
-    .legend-item {
-      display: flex;
-      align-items: center;
-      margin: 0.5rem 0;
-    }
+  .map-container {
+    flex: 1;
+    position: relative;
+  }
 
-    .line-sample {
-      width: 30px;
-      height: 3px;
-      margin-right: 0.5rem;
-    }
+  .map {
+    width: 100%;
+    height: 100%;
+  }
 
-    .line-sample.protected {
-      background-color: #2ecc71;
-    }
+  .legend {
+    position: absolute;
+    bottom: 20px;
+    left: 50%;
+    transform: translateX(-50%);
+    background: white;
+    padding: 10px 20px;
+    border-radius: 4px;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    display: flex;
+    align-items: center;
+    gap: 20px;
+  }
 
-    .line-sample.shared {
-      background-color: #3498db;
-    }
+  .legend-label {
+    font-weight: bold;
+    color: #666;
+  }
 
-    .circle-sample {
-      width: 12px;
-      height: 12px;
-      border-radius: 50%;
-      margin-right: 0.5rem;
-      border: 1px solid rgba(0,0,0,0.1);
-    }
+  .legend-item {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
 
-    .circle-sample.high-traffic {
-      background-color: #e74c3c;
-    }
+  .circle-sample {
+    width: 12px;
+    height: 12px;
+    border-radius: 50%;
+    border: 2px solid white;
+    box-shadow: 0 0 4px rgba(0,0,0,0.2);
+  }
 
-    .circle-sample.medium-traffic {
-      background-color: #f1c40f;
-    }
+  .circle-sample.departures {
+    background-color: #4a90e2;
+  }
 
-    .circle-sample.low-traffic {
-      background-color: #2ecc71;
-    }
+  .circle-sample.balanced {
+    background-color: #9b59b6;
+  }
 
-    :global(.station-marker) {
-      border-radius: 50%;
-      cursor: pointer;
-      border: 2px solid white;
-      box-shadow: 0 0 4px rgba(0,0,0,0.3);
-      transition: all 0.3s ease;
-    }
+  .circle-sample.arrivals {
+    background-color: #f5a623;
+  }
 
-    .controls {
-      position: absolute;
-      bottom: 2rem;
-      left: 50%;
-      transform: translateX(-50%);
-      background: white;
-      padding: 1rem;
-      border-radius: 4px;
-      box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-      display: flex;
-      gap: 1rem;
-      align-items: center;
-    }
+  .legend-section {
+    display: flex;
+    align-items: center;
+    gap: 20px;
+    padding: 0 20px;
+    border-right: 1px solid #eee;
+  }
 
-    button {
-      padding: 0.5rem 1rem;
-      border: none;
-      border-radius: 4px;
-      background: #3498db;
-      color: white;
-      cursor: pointer;
-      transition: background 0.3s ease;
-    }
+  .legend-section:last-child {
+    border-right: none;
+  }
 
-    button:hover {
-      background: #2980b9;
-    }
+  .line-sample {
+    width: 30px;
+    height: 3px;
+  }
 
-    .visualization-toggle {
-      border-right: 1px solid #eee;
-      padding-right: 1rem;
-    }
+  .line-sample.bike-lane {
+    background-color: #32CD32;
+  }
 
-    :global(.popup-content) {
-      padding: 0.5rem;
-    }
+  .line-sample.protected {
+    background-color: #228B22;
+  }
 
-    :global(.popup-content .stats) {
-      margin-top: 0.5rem;
-      font-size: 0.9rem;
-    }
+  .line-sample.shared {
+    background-color: #FFA500;
+  }
 
-    .line-sample.bike-lane {
-      background-color: #3498db;
-    }
+  .view-controls {
+    display: flex;
+    align-items: center;
+    gap: 1rem;
+    margin-left: 2rem;
+  }
 
-    .line-sample.buffered {
-      background-color: #2ecc71;
-    }
-
-    .line-sample.shared {
-      background-color: #f1c40f;
-    }
-
-    .line-sample.protected {
-      background-color: #9b59b6;
-    }
-  </style>
+  .view-controls label {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    cursor: pointer;
+  }
+</style>
