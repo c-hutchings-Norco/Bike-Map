@@ -270,8 +270,44 @@
         }
       });
 
-      // Load real station data instead of generating
-      stations = await loadStations();
+      // Process stations from imported CSV
+      stations = stationsData
+        .split('\n')
+        .slice(1) // Skip header
+        .filter(row => row.trim())
+        .map(row => {
+          const [
+            number,
+            name,
+            lat,
+            long,
+            seasonal_status,
+            municipality,
+            total_docks
+          ] = row.split(',');
+
+          return {
+            type: 'Feature',
+            geometry: {
+              type: 'Point',
+              coordinates: [parseFloat(long), parseFloat(lat)]
+            },
+            properties: {
+              id: number,
+              name: name,
+              status: getRandomStatus(),
+              total_docks: parseInt(total_docks),
+              municipality: municipality,
+              seasonal_status: seasonal_status,
+              usage: Math.random() * 100
+            }
+          };
+        })
+        .filter(station => 
+          !isNaN(station.geometry.coordinates[0]) && 
+          !isNaN(station.geometry.coordinates[1])
+        );
+
       stations = generateTrafficData(); // Add traffic patterns
 
       // Add stations source and layer
@@ -345,70 +381,6 @@
 
     } catch (err) {
       console.error('Error in setupLayers:', err);
-      throw err;
-    }
-  }
-
-  // Replace the existing generateStations function with this:
-  async function loadStations() {
-    try {
-      // Check if we're on GitHub Pages
-      const isGitHubPages = window.location.hostname.includes('github.io');
-      
-      // Use GitHub Pages URL or local URL accordingly
-      const url = isGitHubPages
-        ? 'https://c-hutchings-norco.github.io/data/bluebikes-stations.csv'
-        : '/data/bluebikes-stations.csv';
-      
-      console.log('Loading stations from:', url);
-      
-      const response = await fetch(url);
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-      
-      const text = await response.text();
-      const rows = text.split('\n').slice(1); // Skip header
-      
-      const stations = rows
-        .filter(row => row.trim()) // Remove empty rows
-        .map(row => {
-          const [
-            number,
-            name,
-            lat,
-            long,
-            seasonal_status,
-            municipality,
-            total_docks
-          ] = row.split(',');
-
-          return {
-            type: 'Feature',
-            geometry: {
-              type: 'Point',
-              coordinates: [parseFloat(long), parseFloat(lat)]
-            },
-            properties: {
-              id: number,
-              name: name,
-              status: getRandomStatus(),
-              total_docks: parseInt(total_docks),
-              municipality: municipality,
-              seasonal_status: seasonal_status,
-              usage: Math.random() * 100 // Placeholder for real usage data
-            }
-          };
-        })
-        .filter(station => 
-          !isNaN(station.geometry.coordinates[0]) && 
-          !isNaN(station.geometry.coordinates[1])
-        );
-
-      console.log(`Loaded ${stations.length} stations`);
-      return stations;
-    } catch (err) {
-      console.error('Error loading stations:', err);
       throw err;
     }
   }
