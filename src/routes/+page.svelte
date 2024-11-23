@@ -169,21 +169,22 @@
   // Load GeoJSON data
   async function loadBikeNetwork() {
     try {
-      // Determine if we're on GitHub Pages
-      const isGitHubPages = window.location.hostname.includes('github.io');
+      // Get the current URL
+      const currentUrl = window.location.href;
       
-      // Construct the appropriate URL
-      const baseUrl = isGitHubPages 
-        ? '/c-hutchings-norco.github.io'  // GitHub Pages path
-        : '';  // Local development path
+      // Determine if we're on GitHub Pages and construct the correct URL
+      const url = currentUrl.includes('github.io')
+        ? 'https://c-hutchings-norco.github.io/data/Existing_Bike_Network_2022.geojson'  // Full GitHub Pages URL
+        : '/data/Existing_Bike_Network_2022.geojson';  // Local development path
       
-      const response = await fetch(`${baseUrl}/data/Existing_Bike_Network_2022.geojson`);
+      console.log('Fetching from:', url); // Debug log
+      
+      const response = await fetch(url);
       
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
       const data = await response.json();
-      console.log('Loaded bike network:', data);
       return data;
     } catch (err) {
       console.error('Error loading bike network:', err);
