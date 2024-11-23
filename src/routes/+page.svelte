@@ -49,6 +49,17 @@
   let markerRadius = 6;
   let zoomThreshold = 13;
 
+  // First, let's define consistent size constants at the top of the script
+  const STATION_SIZES = {
+    MIN_DOCKS: 10,
+    MAX_DOCKS: 47,
+    BASE_RADIUS: {
+      small: 6,
+      medium: 8,
+      large: 12
+    }
+  };
+
   // Function to update filter values
   function updateFilter(min, max) {
     minUsage = min;
@@ -76,17 +87,24 @@
   function applyUsageFilter() {
     if (!map) return;
     
-    // Create Mapbox GL filter expression
     const filter = [
       'all',
       ['>=', ['get', 'usage'], minUsage],
       ['<=', ['get', 'usage'], maxUsage]
     ];
     
-    // Apply filter to stations layer
     map.setFilter('stations', filterActive ? filter : null);
 
-    // Update stats display with filtered data
+    // Ensure sizes are maintained after filtering
+    map.setPaintProperty('stations', 'circle-radius', [
+      'interpolate',
+      ['linear'],
+      ['get', 'total_docks'],
+      STATION_SIZES.MIN_DOCKS, STATION_SIZES.BASE_RADIUS.small,
+      20, STATION_SIZES.BASE_RADIUS.medium,
+      STATION_SIZES.MAX_DOCKS, STATION_SIZES.BASE_RADIUS.large
+    ]);
+
     updateFilteredStats();
   }
 
@@ -251,9 +269,9 @@
             'interpolate',
             ['linear'],
             ['get', 'total_docks'],
-            10, 6,    // minimum docks -> 6px radius
-            20, 8,    // medium docks -> 8px radius
-            47, 12    // maximum docks -> 12px radius
+            STATION_SIZES.MIN_DOCKS, STATION_SIZES.BASE_RADIUS.small,    // minimum docks -> 6px radius
+            20, STATION_SIZES.BASE_RADIUS.medium,    // medium docks -> 8px radius
+            STATION_SIZES.MAX_DOCKS, STATION_SIZES.BASE_RADIUS.large    // maximum docks -> 12px radius
           ],
           'circle-color': [
             'match',
@@ -405,9 +423,9 @@
       'interpolate',
       ['linear'],
       ['get', 'total_docks'],
-      10, 6,    // minimum docks -> 6px radius
-      20, 8,    // medium docks -> 8px radius
-      47, 12    // maximum docks -> 12px radius
+      STATION_SIZES.MIN_DOCKS, STATION_SIZES.BASE_RADIUS.small,
+      20, STATION_SIZES.BASE_RADIUS.medium,
+      STATION_SIZES.MAX_DOCKS, STATION_SIZES.BASE_RADIUS.large
     ]);
   }
 
@@ -679,15 +697,15 @@
     if (!map) return;
     
     const zoom = map.getZoom();
-    const baseScale = Math.pow(2, zoom - zoomThreshold);
+    const baseScale = Math.max(1, Math.pow(2, zoom - zoomThreshold));
     
     map.setPaintProperty('stations', 'circle-radius', [
       'interpolate',
       ['linear'],
       ['get', 'total_docks'],
-      10, 6 * baseScale,    // minimum docks
-      20, 8 * baseScale,    // medium docks
-      47, 12 * baseScale    // maximum docks
+      STATION_SIZES.MIN_DOCKS, STATION_SIZES.BASE_RADIUS.small * baseScale,
+      20, STATION_SIZES.BASE_RADIUS.medium * baseScale,
+      STATION_SIZES.MAX_DOCKS, STATION_SIZES.BASE_RADIUS.large * baseScale
     ]);
   }
 
