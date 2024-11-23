@@ -8,6 +8,7 @@
     import 'mapbox-gl/dist/mapbox-gl.css';
     import bikeLanes from '../data/bike-lanes-geo.json';
     import bikeTraffic from '../data/bike-traffic.json';
+    import bikeNetwork from '../data/Existing_Bike_Network_2022.geojson';
 
     const MAPBOX_TOKEN = 'pk.eyJ1IjoiY2h1dGNoaW5ncyIsImEiOiJjbTNxZ3NqY28wNHIxMmtvZnc1Zjc0NW12In0.z4_H0bPDZyrgce46gWBCjQ';
     let map;
@@ -200,6 +201,34 @@
       });
 
       map.on('load', () => {
+        try {
+          // Add bike network data
+          map.addSource('bike-network', {
+            type: 'geojson',
+            data: bikeNetwork
+          });
+
+          map.addLayer({
+            id: 'bike-network',
+            type: 'line',
+            source: 'bike-network',
+            paint: {
+              'line-color': [
+                'match',
+                ['get', 'ExisFacil'],
+                'BL', '#3498db',    // Bike Lane
+                'BFBL', '#2ecc71',  // Buffered Bike Lane
+                'SLM', '#f1c40f',   // Shared Lane Marking
+                'SUP', '#9b59b6',   // Separated/Protected
+                '#7f8c8d'          // Other/Default
+              ],
+              'line-width': 3
+            }
+          });
+        } catch (error) {
+          console.error('Error adding bike network layer:', error);
+        }
+        
         // Add bike lanes
         map.addSource('bike-lanes', {
           type: 'geojson',
@@ -286,14 +315,22 @@
     <div class="legend">
       <h3>Legend</h3>
       <div class="legend-section">
-        <h4>Bike Lanes</h4>
+        <h4>Bike Infrastructure</h4>
         <div class="legend-item">
-          <div class="line-sample protected"></div>
-          <span>Protected Lane</span>
+          <div class="line-sample bike-lane"></div>
+          <span>Bike Lane</span>
+        </div>
+        <div class="legend-item">
+          <div class="line-sample buffered"></div>
+          <span>Buffered Bike Lane</span>
         </div>
         <div class="legend-item">
           <div class="line-sample shared"></div>
-          <span>Shared Lane</span>
+          <span>Shared Lane Marking</span>
+        </div>
+        <div class="legend-item">
+          <div class="line-sample protected"></div>
+          <span>Protected/Separated</span>
         </div>
       </div>
       
@@ -468,5 +505,21 @@
     :global(.popup-content .stats) {
       margin-top: 0.5rem;
       font-size: 0.9rem;
+    }
+
+    .line-sample.bike-lane {
+      background-color: #3498db;
+    }
+
+    .line-sample.buffered {
+      background-color: #2ecc71;
+    }
+
+    .line-sample.shared {
+      background-color: #f1c40f;
+    }
+
+    .line-sample.protected {
+      background-color: #9b59b6;
     }
   </style>

@@ -3,5 +3,6 @@ import { defineConfig } from 'vite';
 
 export default defineConfig({
 	plugins: [sveltekit()],
-	base: process.env.BASE_PATH || ''
+	base: process.env.BASE_PATH || '',
+	assetsInclude: ['**/*.geojson']
 });
