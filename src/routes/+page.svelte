@@ -2,6 +2,7 @@
   import mapbox from 'mapbox-gl';
   import { onMount, onDestroy } from 'svelte';
   import 'mapbox-gl/dist/mapbox-gl.css';
+  import bikeNetworkData from '$lib/data/Existing_Bike_Network_2022.geojson';
   // Remove the bikeNetwork import
 
   const MAPBOX_TOKEN = 'pk.eyJ1IjoiY2h1dGNoaW5ncyIsImEiOiJjbTNxZ3NqY28wNHIxMmtvZnc1Zjc0NW12In0.z4_H0bPDZyrgce46gWBCjQ';
@@ -166,27 +167,9 @@
 
   const { batchUpdates, smoothUpdate } = optimizePerformance();
 
-  // Load GeoJSON data
-  async function loadBikeNetwork() {
-    try {
-      const response = await fetch('/data/Existing_Bike_Network_2022.geojson');
-      if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
-      }
-      const data = await response.json();
-      return data;
-    } catch (err) {
-      console.error('Error loading bike network:', err);
-      throw err;
-    }
-  }
-
   // Update initializeMap
   async function initializeMap() {
     try {
-      // Load data first
-      bikeNetwork = await loadBikeNetwork();
-      
       mapbox.accessToken = MAPBOX_TOKEN;
       
       map = new mapbox.Map({
@@ -196,7 +179,6 @@
         zoom: 12
       });
 
-      // Wait for map to load
       await new Promise((resolve) => {
         map.on('style.load', () => {
           console.log('Map style loaded');
@@ -204,11 +186,11 @@
         });
       });
 
-      console.log('Initializing layers...');
+      // Use bikeNetworkData directly
+      bikeNetwork = bikeNetworkData;
       await setupLayers();
-      console.log('Layers initialized');
-      
       mapInitialized = true;
+      
     } catch (err) {
       error = err.message;
       console.error('Map initialization error:', err);
