@@ -3,6 +3,7 @@
   import { onMount, onDestroy } from 'svelte';
   import 'mapbox-gl/dist/mapbox-gl.css';
   import bikeNetworkData from '$lib/data/Existing_Bike_Network_2022.geojson';
+  import stationsData from '$lib/data/bluebikes-stations.csv?raw'; // Note the ?raw query
   // Remove the bikeNetwork import
 
   const MAPBOX_TOKEN = 'pk.eyJ1IjoiY2h1dGNoaW5ncyIsImEiOiJjbTNxZ3NqY28wNHIxMmtvZnc1Zjc0NW12In0.z4_H0bPDZyrgce46gWBCjQ';
@@ -310,7 +311,21 @@
   // Replace the existing generateStations function with this:
   async function loadStations() {
     try {
-      const response = await fetch('/data/bluebikes-stations.csv');
+      // Check if we're on GitHub Pages
+      const isGitHubPages = window.location.hostname.includes('github.io');
+      
+      // Use GitHub Pages URL or local URL accordingly
+      const url = isGitHubPages
+        ? 'https://c-hutchings-norco.github.io/data/bluebikes-stations.csv'
+        : '/data/bluebikes-stations.csv';
+      
+      console.log('Loading stations from:', url);
+      
+      const response = await fetch(url);
+      if (!response.ok) {
+        throw new Error(`HTTP error! status: ${response.status}`);
+      }
+      
       const text = await response.text();
       const rows = text.split('\n').slice(1); // Skip header
       
