@@ -169,7 +169,7 @@
   // Load GeoJSON data
   async function loadBikeNetwork() {
     try {
-      const response = await fetch('/data/Existing_Bike_Network_2022.geojson');
+      const response = await fetch('/c-hutchings-norco.github.io/data/Existing_Bike_Network_2022.geojson');
       if (!response.ok) {
         throw new Error(`HTTP error! status: ${response.status}`);
       }
@@ -329,7 +329,7 @@
   // Replace the existing generateStations function with this:
   async function loadStations() {
     try {
-      const response = await fetch('/data/bluebikes-stations.csv');
+      const response = await fetch('/c-hutchings-norco.github.io/data/bluebikes-stations.csv');
       const text = await response.text();
       const rows = text.split('\n').slice(1); // Skip header
       
