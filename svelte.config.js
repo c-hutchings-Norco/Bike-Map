@@ -6,7 +6,7 @@ const dev = process.env.NODE_ENV === 'development';
 const config = {
 	kit: {
 		paths: {
-			 base: dev ? '' : '/bike-map'
+			 base: dev ? '' : '/Bike-Map'
 		},
 		adapter: adapter({
 			pages: 'build',
