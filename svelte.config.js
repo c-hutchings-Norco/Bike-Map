@@ -1,10 +1,12 @@
 import adapter from '@sveltejs/adapter-static';
 
+const dev = process.env.NODE_ENV === 'development';
+
 /** @type {import('@sveltejs/kit').Config} */
 const config = {
 	kit: {
 		paths: {
-			base: process.env.BASE_PATH || ''
+			 base: dev ? '' : '/bike-map'
 		},
 		adapter: adapter({
 			pages: 'build',
