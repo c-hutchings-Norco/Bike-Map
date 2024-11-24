@@ -213,7 +213,7 @@
       
       map = new mapbox.Map({
         container,
-        style: 'mapbox://styles/mapbox/light-v11',
+        style: 'mapbox://styles/mapbox/streets-v12',
         center: [-71.0589, 42.3601],
         zoom: 12
       });
@@ -223,6 +223,48 @@
           console.log('Map style loaded');
           resolve();
         });
+      });
+
+      // Add the Boston area fill layer
+      map.addSource('boston-area', {
+        'type': 'geojson',
+        'data': {
+          'type': 'Feature',
+          'geometry': {
+            'type': 'Polygon',
+            'coordinates': [[
+              [-71.191413, 42.227797],
+              [-71.191413, 42.397797],
+              [-70.921413, 42.397797],
+              [-70.921413, 42.227797],
+              [-71.191413, 42.227797]
+            ]]
+          }
+        }
+      });
+
+      // Add the area fill layer before other layers
+      map.addLayer({
+        'id': 'boston-area-fill',
+        'type': 'fill',
+        'source': 'boston-area',
+        'layout': {},
+        'paint': {
+          'fill-color': '#f8f9fa',
+          'fill-opacity': 0.6
+        }
+      });
+
+      // Add a subtle border around the Boston area
+      map.addLayer({
+        'id': 'boston-area-border',
+        'type': 'line',
+        'source': 'boston-area',
+        'layout': {},
+        'paint': {
+          'line-color': '#dee2e6',
+          'line-width': 2
+        }
       });
 
       // Use imported data directly
@@ -843,7 +885,7 @@
           class:active={animationActive}
           on:click={() => animationActive ? stopTimeAnimation() : startTimeAnimation()}
         >
-          {animationActive ? '⏸' : '▶️'} {animationActive ? 'Pause' : 'Play'}
+          {animationActive ? '���' : '▶️'} {animationActive ? 'Pause' : 'Play'}
         </button>
       </div>
 
